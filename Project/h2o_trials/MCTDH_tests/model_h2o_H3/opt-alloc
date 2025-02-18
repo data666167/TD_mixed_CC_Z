@@ -1,0 +1,28 @@
+
+ALLOC-SECTION
+ maxkoe  =      26
+ maxhtm  =      45
+ maxhop  =      42
+ maxfac  =      19
+ maxdef  =      85
+ maxmuld =       1
+ maxLMR  =       0
+ maxedim =       0
+ maxsub  =      60
+ maxreadspf=     0
+ maxnhtmshift=   1
+end-alloc-section
+
+
+####################################
+# Automatically determined
+# maxdim  =     6
+# maxsta  =     2
+# maxtape =     0
+# maxdepth=     0
+# maxham  =     2
+# maxpar  =    15
+# maxpes  =     1
+# maxrdf  =     0
+####################################
+

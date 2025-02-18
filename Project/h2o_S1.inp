@@ -1,0 +1,50 @@
+#######################################################################
+###           water IP 3-mode multi-set                            ####
+#######################################################################
+
+RUN-SECTION
+title = propagation of h2o
+name = model_h2o_H1_converged
+propagation
+auto=once
+psi=single
+tfinal = 100.0 tout = 0.1 
+end-run-section
+
+OPERATOR-SECTION
+oppath = .
+opname = model_h2o_H1
+end-operator-section
+
+SPF-BASIS-SECTION
+multi-set
+      v01      =  6, 1 
+      v02      =  6, 1
+      v03      =  6, 1
+end-spf-basis-section
+
+PRIMITIVE-BASIS-SECTION
+    v01    HO     70  0.0     1.0     1.0
+    v02    HO     70  0.0     1.0     1.0
+    v03    HO     70  0.0     1.0     1.0
+    el     el     2
+end-primitive-basis-section
+
+INTEGRATOR-SECTION
+CMF/var = 0.1,  1.0d-05
+BS/spf  =  5 ,  1.0d-05 ,  2.5d-04
+SIL/A   =  5 ,  1.0d-05
+end-integrator-section
+
+INIT_WF-SECTION
+build
+  init_state=2
+    v01    HO     0.0   0.0     1.0     1.0
+    v02    HO     0.0   0.0     1.0     1.0
+    v03    HO     0.0   0.0     1.0     1.0
+end-build
+operate=Ex
+end-init_wf-section
+
+end-input
+

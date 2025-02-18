@@ -1,0 +1,30 @@
+
+# ------ Host: "oz-computron" ----------Mon Feb 17 21:26:41 2025
+
+# /home/oz_computron/Desktop/Research_idea/mixed_reprsentation/t-amplitudes-8171b20377162cf3b704c0d83f7eeae58bcbfdb5/model_h2o_H2_spf_150
+
+maxdim    =       6
+maxsta    =       2
+maxtape   =       0
+maxdepth  =       0
+maxham    =       2
+maxpar    =      14
+maxhpar   =       8
+maxpes    =       1
+maxrdf    =       0
+maxkoe    =    4000,    default =    4000
+maxhtm    =    4000,    default =    4000
+maxhop    =    4000,    default =    4000
+maxfac    =     200,    default =     200
+maxdef    =     240,    default =     240
+maxmuld   =      10,    default =      10
+maxsub    =     100,    default =     100
+maxLMR    =      20,    default =      20
+maxedim   =      80,    default =      80
+maxreadspf=      10,    default =      10
+maxnhtmshift =   10,    default =      10
+end-alloc
+
+# Run "phelp <parametername>" to see the meaning of the parameter.
+# Or see HTML docu: Input Documentation/Alloc-Section
+

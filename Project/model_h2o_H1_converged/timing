@@ -1,0 +1,25 @@
+ Subroutine           Calls N         cpu/N             cpu       %cpu      real/N          real  cpu/real
+
+ BS                      9009         0.001           7.0600      87.8
+ Funk-v03               84045         0.000           2.4900      31.0
+ Funk-v02               79305         0.000           2.4500      30.5
+ Funk-v01               45443         0.000           1.4100      17.5
+ Funk1                   2000         0.000           0.2200       2.7
+ Output                  1001         0.000           0.1300       1.6
+ Funk2                   1001         0.000           0.1100       1.4
+ Funk3                   1001         0.000           0.0900       1.1
+ Density                 2004         0.000           0.0800       1.0
+ Funk0                   1000         0.000           0.0600       0.7
+ SIL                     3000         0.000           0.0500       0.6
+ Funka                   8980         0.000           0.0400       0.5
+ Startup                    1         0.020           0.0200       0.2
+ genDVR                     1         0.020           0.0200       0.2
+ MFields                 2002         0.000           0.0100       0.1
+
+Total (usr,sys,cpu)       7.44     0.60       8.04   (  0h :  0m :  8.04s)
+
+ ---------------------------------------------------------------------------
+ ------ Host: "oz-computron" ----------Mon Feb 17 22:10:59 2025
+
+ /home/oz_computron/Desktop/Research_idea/mixed_reprsentation/t-amplitudes-8171b20377162cf3b704c0d83f7eeae58bcbfdb5/model_h2o_H1_converged
+  propagation of h2o                                                           
