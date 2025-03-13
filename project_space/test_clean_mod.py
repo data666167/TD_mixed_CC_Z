@@ -129,7 +129,7 @@ def get_model_from_json_file(path, order):
 
 # run cmds
 if (__name__ == '__main__'):
-    neil = False
+    neil =  False
     oz = True
     
     use_JSON_flag = True

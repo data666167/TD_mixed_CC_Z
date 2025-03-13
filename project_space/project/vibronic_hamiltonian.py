@@ -769,7 +769,6 @@ class vibronic_hamiltonian(object):
             R += H[(1, 1)]
             
             if self.T_truncation_order >= 1:
-                breakpoint()
                 R += np.einsum('abijk,i->abjk', H[(2, 1)], T[1])
 
                 if self.trunc.at_least_quadratic:
@@ -2701,7 +2700,6 @@ class vibronic_hamiltonian(object):
             
             # compute ACF for ABS and ECD
             U = z_0 * np.exp(t_dict[0])
-            print(z_0,'\n',t_dict[0],'\n',np.exp(t_dict[0]))
             
             if np.abs(np.exp(t_dict[0])) > 10:
                 breakpoint()
@@ -2820,7 +2818,7 @@ class vibronic_hamiltonian(object):
             ),
             y0=initial_y_tensor,  # initial state - shape (n, )
             args=(t_final, ),  # extra args to pass to `rk45_solve_ivp_integration_function`
-            max_step= 0.1, #self.step_size,  # maximum allowed step size
+            #max_step= 0.1, #self.step_size,  # maximum allowed step size
             rtol=relative_tolerance,  # relative tolerance
             atol=absolute_tolerance,  # absolute tolerance
             store_y_values=False,  # do not store the y values over the integration
