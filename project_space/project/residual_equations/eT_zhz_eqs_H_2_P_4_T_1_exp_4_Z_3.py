@@ -24,11 +24,13 @@ def add_m0_n0_HZ_terms(R, ansatz, truncation, t_args, h_args, z_args):
     """
 
     if ansatz.ground_state:
+
         R += np.einsum('ac, c -> a', h_args[(0, 0)], z_args[(0, 0)])
 
         if truncation.h_at_least_linear:
             if truncation.z_at_least_linear:
                 R += np.einsum('aci, ci -> a', h_args[(0, 1)], z_args[(1, 0)])
+                
 
         if truncation.h_at_least_quadratic:
             if truncation.z_at_least_quadratic:

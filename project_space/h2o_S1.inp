@@ -4,7 +4,7 @@
 
 RUN-SECTION
 title = propagation of h2o
-name = model_h2o_H1_converged
+name = TESTING
 propagation
 auto=once
 psi=single

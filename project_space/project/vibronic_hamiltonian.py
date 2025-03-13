@@ -32,6 +32,7 @@ from project.residual_equations.symmetrize import symmetrize_tensor
 
 # testing generated equations
 from project.residual_equations import eT_zhz_eqs_H_2_P_4_T_1_exp_4_Z_1 as z_one_eqns
+# TODO create correct residual equations
 from project.residual_equations import eT_zhz_eqs_H_2_P_4_T_1_exp_4_Z_2 as z_two_eqns
 from project.residual_equations import eT_zhz_eqs_H_2_P_4_T_1_exp_4_Z_3 as z_three_eqns
 
@@ -56,7 +57,8 @@ optimized = False
 
 class vibronic_hamiltonian(object):
     """ vibronic_hamiltonian is python object """
-
+    
+    
     def __init__(
             self, model, model_name, build_H=False, HO_size=40, cc_truncation_order=1, hamiltonian_truncation_order=1,
             compare_with_mctdh=True, comparing_to_test_models=False,
@@ -66,6 +68,8 @@ class vibronic_hamiltonian(object):
             force_use_optimize=False,
             calculate_population_flag=True,
     ):
+        # TODO ensure vibronic hamiltonian object self.trunc corresponds to taylor no cluster op order
+        # self.dT has removed supprt for T^2 and self.dz has support for Z^4   
         """
         trans: ?
         theta: only affects similarity_transformation (debugging?)
@@ -155,7 +159,7 @@ class vibronic_hamiltonian(object):
         self.gen_trunc.confirm_at_least_triples = lambda: True
 
         # ---------------------------------------------------------------------
-
+         
         A, N = self.A, self.N
 
         # initialize derivative tensors
@@ -166,8 +170,6 @@ class vibronic_hamiltonian(object):
         if self.T_truncation_order >= 1:
             self.dT[1] = np.zeros((A, N), dtype=complex)
 
-        if self.T_truncation_order >= 2:
-            self.dT[2] = np.zeros((A, N, N), dtype=complex)
 
         self.dZ = {
             0: np.zeros((A, A), dtype=complex),
@@ -181,6 +183,9 @@ class vibronic_hamiltonian(object):
 
         if self.Z_truncation_order >= 3:
             self.dZ[3] = np.zeros((A, A, N, N, N), dtype=complex)
+            
+        if self.Z_truncation_order >= 4:
+            self.dZ[4] = np.zeros((A, A, N, N, N, N), dtype=complex)
 
         # ---------------------------------------------------------------------
         # initialize Lagrange multiplier
@@ -272,6 +277,8 @@ class vibronic_hamiltonian(object):
         # make sure we have sufficient CC truncation to calculate model to the order requested
         # assert self.trunc.cc_truncation_order >= self.trunc.hamiltonian_truncation_order, truncation_info
         # make sure that the Hamiltonian has sufficient terms to calculate `highest_order`
+        
+        # Temporarily off to test H=0
         assert hamiltonian_order >= self.trunc.hamiltonian_truncation_order, truncation_info
 
         # self.highest_order = highest_order
@@ -590,7 +597,8 @@ class vibronic_hamiltonian(object):
         H with a single creation operator is represented by
             - self.h[(0, 1)]
         """
-
+        # TODO Get right coefficients for quadratic
+        # TODO initalize the higher order terms   
         N, A = self.N, self.A  # for brevity
 
         # define coefficient tensors
@@ -600,7 +608,20 @@ class vibronic_hamiltonian(object):
             (1, 0): np.zeros((A, A, N), dtype=complex),
             (1, 1): np.zeros((A, A, N, N), dtype=complex),
             (0, 2): np.zeros((A, A, N, N), dtype=complex),
-            (2, 0): np.zeros((A, A, N, N), dtype=complex)
+            (2, 0): np.zeros((A, A, N, N), dtype=complex),
+            
+            # NEW 3 hamiltonian 
+            (0, 3): np.zeros((A, A, N, N, N), dtype=complex),
+            (3, 0): np.zeros((A, A, N, N, N), dtype=complex),
+            (1, 2): np.zeros((A, A, N, N, N), dtype=complex),
+            (2, 1): np.zeros((A, A, N, N, N), dtype=complex),
+            
+            # New 4 Hamiltonian
+            (1, 3): np.zeros((A, A, N, N, N, N), dtype=complex),
+            (3, 1): np.zeros((A, A, N, N, N, N), dtype=complex),
+            (0, 4): np.zeros((A, A, N, N, N, N), dtype=complex),
+            (4, 0): np.zeros((A, A, N, N, N, N), dtype=complex),
+            (2, 2): np.zeros((A, A, N, N, N, N), dtype=complex),
         }
 
         # read in input parameters
@@ -635,41 +656,9 @@ class vibronic_hamiltonian(object):
 
                 # quadratic terms
                 self.h[(1, 1)] += self.model[VMK.G2].copy()
-                self.h[(2, 0)] += self.model[VMK.G2].copy()
-                self.h[(0, 2)] += self.model[VMK.G2].copy()
+                self.h[(2, 0)] += 0.5*self.model[VMK.G2].copy()
+                self.h[(0, 2)] += 0.5*self.model[VMK.G2].copy()
                 
-
-            # if computing Frank-Condon(FC) model then
-            # zero out all electronically-diagonal terms
-            if self.FC:
-                for a, b in it.product(range(A), repeat=2):
-                    if a != b:
-                        self.h[(1, 1)][a, b, :] = np.zeros([N, N])
-                        self.h[(2, 0)][a, b, :] = np.zeros([N, N])
-                        self.h[(0, 2)][a, b, :] = np.zeros([N, N])
-                        self.h[(1, 0)][a, b, :] = np.zeros([N, ])
-                        self.h[(0, 1)][a, b, :] = np.zeros([N, ])
-
-        # specific prefactors for comparing comparing to fixed results for pytest
-        elif self.comparing_to_test_models:
-            # energy
-            self.h[(0, 0)] += self.model[VMK.E].copy()
-
-            # frequencies
-            for a, j in it.product(range(A), range(N)):
-                self.h[(1, 1)][a, a, j, j] += 4 * self.model[VMK.w][j].copy()
-
-            # linear terms
-            if self.trunc.at_least_linear:
-                self.h[(0, 1)] += self.model[VMK.G1].copy()
-                self.h[(1, 0)] += self.model[VMK.G1].copy()
-
-            # quadratic terms
-            if self.trunc.at_least_quadratic:
-                self.h[(1, 1)] += 4 * self.model[VMK.G2].copy()
-                self.h[(2, 0)] += 2 * self.model[VMK.G2].copy()
-                self.h[(0, 2)] += 2 * self.model[VMK.G2].copy()
-
         else:
             Exception("You shouldn't reach this point")
 
@@ -704,11 +693,16 @@ class vibronic_hamiltonian(object):
     def _similarity_trans(self, H_args, t_args):
         """ Apply a similarity transformation to the Hamiltonian.
         This is applied for each electronic surface.
+        
+        updated
+        TODO- Test Linear function with corresponding system  
+        TODO-  Test quadratic function with corresponding system
+        TODO Write cubic functions 
+        TODO Write quartic functions  
         """
 
         A, N = self.A, self.N   # for readability
 
-        """ TO DO: """
         # rewrite residue for T to avoid permutations of electronic labels
         def f_t_0(H, T):
             """return residue R_0"""
@@ -728,19 +722,18 @@ class vibronic_hamiltonian(object):
             # quadratic
             if self.T_truncation_order >= 2:
                 R += 0.5 * np.einsum('abkl,kl->ab', H[(0, 2)], T[2])
-
+            
             return R
 
         def f_t_I(H, T):
-            """return residue R_I"""
+            """return residue R^i"""
 
             # initialize as zero
             R = np.zeros([A, A, N], dtype=complex)
 
-            # linear
+            # constant
             R += H[(0, 1)]
-
-            # quadratic
+            
             if self.T_truncation_order >= 1:
                 R += np.einsum('abik,k->abi', H[(0, 2)], T[1])
 
@@ -759,72 +752,109 @@ class vibronic_hamiltonian(object):
             if self.T_truncation_order >= 1:
                 R += np.einsum('abki,k->abi', H[(1, 1)], T[1])
 
-                # quadratic
-                if self.T_truncation_order >= 2:
-                    R += np.einsum('abk,ki->abi', H[(0, 1)], T[2])
-                    R += np.einsum('abkl,k,li->abi', H[(0, 2)], T[1], T[2])
-
-                    # cubic
-                    if self.T_truncation_order >= 3:
-                        R += np.einsum('abkl,kli->abi', H[(0, 2)], T[3])
-
+                if self.trunc.at_least_quadratic:
+                    R += np.einsum('abijk,i,j->abk', H[(3, 0)], T[1],T[1])                
+                if self.trunc.at_least_cubic:
+                    R += np.einsum('abijkl,i,j,k->abl', H[(4, 0)], T[1],T[1],T[1])
+        
             return R
 
         def f_t_Ij(H, T):
-            """return residue R_Ij"""
+            """return residue R^I_j"""
 
             # initialize
             R = np.zeros([A, A, N, N], dtype=complex)
 
             # first term
             R += H[(1, 1)]
+            
+            if self.T_truncation_order >= 1:
+                breakpoint()
+                R += np.einsum('abijk,i->abjk', H[(2, 1)], T[1])
 
-            # quadratic
-            if self.T_truncation_order >= 2:
-                R += np.einsum('abik,kj->abij', H[(0, 2)], T[2])
+                if self.trunc.at_least_quadratic:
+                    R += 0.5*np.einsum('abijkl,i,j->abkl', H[(2, 1)], T[1],T[1])                
+
 
             return R
 
         def f_t_IJ(H, T):
-            """return residue R_IJ"""
+            """return residue R^IJ"""
 
             # initialize as zero
             R = np.zeros([A, A, N, N], dtype=complex)
+            
+            # constant 
+            R += H[(0,2)]
 
-            # if self.hamiltonian_truncation_order >= 2:
-            # quadratic
-            if self.T_truncation_order >= 2:
-                R += H[(0, 2)]
-                pass
+            # linear            
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('abijk,i->abjk', H[(1, 2)], T[1])
+
+                if self.trunc.at_least_quadratic:
+                    R += 0.25*np.einsum('abijkl,i,j->abkl', H[(2, 2)], T[1],T[1])              
 
             return R
 
         def f_t_ij(H, T):
             """return residue R_ij"""
 
-            # # initialize as zero
+            # initialize as zero
             R = np.zeros([A, A, N, N], dtype=complex)
+            
+            R += H[(2,0)]
 
-            # if self.hamiltonian_truncation_order >= 2:
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('abijk,i->abjk', H[(0, 3)], T[1])
 
-            # quadratic
-            if self.T_truncation_order >= 2:
-                R += H[(2, 0)]  # h term
-                R += np.einsum('abkj,ki->abij', H[(1, 1)], T[2])
-                R += np.einsum('abki,kj->abij', H[(1, 1)], T[2])
-                R += 0.5 * np.einsum('abkl,ki,lj->abij', H[(0, 2)], T[2], T[2])
-                R += 0.5 * np.einsum('abkl,kj,li->abij', H[(0, 2)], T[2], T[2])
+                if self.trunc.at_least_quadratic:
+                    R += 0.25*np.einsum('abijkl,i,j->abkl', H[(4, 0)], T[1],T[1])
+            
             return R
-
+        
+        def f_t_ijk():
+            return
+        def f_t_IJK():
+            return
+        def f_t_IJk():
+            return
+        def f_t_ijK():
+            return
+        def f_t_Ijkl():
+            return
+        def f_t_iJKl():
+            return
+        def f_t_IJKl():
+            return
+        def f_t_ijkl():
+            return
+        def f_t_IJkl():
+            return
+          
+        
         # compute similarity transformed Hamiltonian over e^T
         sim_h = {}
+        
+        
         sim_h[(0, 0)] = f_t_0(H_args, t_args)
         sim_h[(0, 1)] = f_t_I(H_args, t_args)
         sim_h[(1, 0)] = f_t_i(H_args, t_args)
         sim_h[(1, 1)] = f_t_Ij(H_args, t_args)
         sim_h[(0, 2)] = f_t_IJ(H_args, t_args)
         sim_h[(2, 0)] = f_t_ij(H_args, t_args)
-
+        
+        # rank 3
+        sim_h[(3, 0)] = H_args[(3, 0)]
+        sim_h[(0, 3)] = H_args[(0, 3)]
+        sim_h[(1, 2)] = H_args[(1, 2)]
+        sim_h[(2, 1)] = H_args[(2, 1)]
+ 
+        # rank 4 
+        sim_h[(3, 1)] = H_args[(3, 1)]
+        sim_h[(1, 3)] = H_args[(1, 3)]
+        sim_h[(0, 4)] = H_args[(0, 4)]
+        sim_h[(4, 0)] = H_args[(4, 0)]
+        sim_h[(2, 2)] = H_args[(2, 2)]        
         return sim_h
 
     def apply_time_step_conversion(self, step_size):
@@ -884,6 +914,7 @@ class vibronic_hamiltonian(object):
         # since we save C(t) for all integration steps, but only some are accepted
         C_dic_ABS = {c[0]: c[1] for c in self.C_tau_ABS}
         for idx, t in enumerate(sol.t):
+            
             self.C_tau_cc_ABS[idx] = C_dic_ABS[t]
 
         C_dic_ECD = {c[0]: c[1] for c in self.C_tau_ECD}
@@ -956,12 +987,12 @@ class vibronic_hamiltonian(object):
 
     def _unravel_y_tensor(self, y_tensor):
         """ Restore the original shape of the flattened y tensor """
-
+        # added support for Z 4 and removed T_2 support,        
         A, N = self.A, self.N  # for brevity
 
         # all return tensors start as None
-        Z = {0: None, 1: None, 2: None, 3: None}
-        T = {0: None, 1: None, 2: None}
+        Z = {0: None, 1: None, 2: None, 3: None, 4:None}
+        T = {0: None, 1: None}
 
         # ------------------------------ restore z tensor ----------------------------
 
@@ -999,6 +1030,15 @@ class vibronic_hamiltonian(object):
                 y_tensor[start_cubic_slice_index: end_cubic_slice_index],
                 newshape=(A, A, N, N, N)
             )
+        
+        if self.Z_truncation_order >= 4:
+            # quartic terms
+            start_quartic_slice_index = end_cubic_slice_index
+            end_quartic_slice_index = start_quartic_slice_index + A * A * N * N * N * N
+            Z[4] = np.reshape(
+                y_tensor[start_quartic_slice_index: end_quartic_slice_index],
+                newshape=(A, A, N, N, N, N)
+            )
 
         # ------------------------------ restore t tensor ----------------------------
 
@@ -1014,6 +1054,9 @@ class vibronic_hamiltonian(object):
 
         if self.Z_truncation_order >= 3:
             start_constant_slice_index = end_cubic_slice_index
+        
+        if self.Z_truncation_order >= 4:
+            start_constant_slice_index = end_quartic_slice_index
 
         # constant terms
         end_constant_slice_index = start_constant_slice_index + A
@@ -1031,20 +1074,12 @@ class vibronic_hamiltonian(object):
                 newshape=(A, N)
             )
 
-        if self.T_truncation_order >= 2:
-            # quadratic terms
-            start_quadratic_slice_index = end_linear_slice_index
-            end_quadratic_slice_index = start_quadratic_slice_index + A * N * N
-            T[2] = np.reshape(
-                y_tensor[start_quadratic_slice_index: end_quadratic_slice_index],
-                newshape=(A, N, N)
-            )
 
         return Z, T
 
     def _ravel_y_tensor(self, Z, T):
         """ Flatten the `t` and `z` tensors into a 1D array """
-
+        # modified to include  Z 4 and no T_2 support
         z_tensor_list = [Z[0].ravel(), ]
         if self.Z_truncation_order >= 1:
             z_tensor_list.append(Z[1].ravel())
@@ -1052,12 +1087,12 @@ class vibronic_hamiltonian(object):
             z_tensor_list.append(Z[2].ravel())
         if self.Z_truncation_order >= 3:
             z_tensor_list.append(Z[3].ravel())
-
+        if self.Z_truncation_order >= 4:
+            z_tensor_list.append(Z[4].ravel())
+        
         t_tensor_list = [T[0].ravel(), ]
         if self.T_truncation_order >= 1:
             t_tensor_list.append(T[1].ravel())
-        if self.T_truncation_order >= 2:
-            t_tensor_list.append(T[2].ravel())
 
         # the t tensor should come before the z tensor
         y_tensor = np.concatenate((*z_tensor_list, *t_tensor_list))
@@ -1995,6 +2030,815 @@ class vibronic_hamiltonian(object):
 
         return output_tensor
 
+    '''
+    ----------------------------------------------------------------------------------------------
+    NEWLY MINTED FUNCTS FOR NEW SCHEME
+            shapes are different than expected try again for T_ and rework for Z 
+            # initialize z amplitude
+            initial_Z = {
+                0: np.eye(A, dtype=complex),
+                1: np.zeros([A, A, N], dtype=complex),
+                2: np.zeros([A, A, N, N], dtype=complex),
+                3: np.zeros([A, A, N, N, N], dtype=complex),
+            }
+
+            # initialize t amplitude
+            initial_T = {
+                0: np.zeros(A, dtype=complex),
+                1: np.zeros([A, N], dtype=complex),
+                2: np.zeros([A, N, N], dtype=complex),
+    ----------------------------------------------------------------------------------------------
+    '''
+    
+    def _cal_H_bar_tilde_Oz(self, H_bar:dict, T_dict:dict, opt_flag=False)-> dict:
+        """ Summary
+        Oz calculate the second similarity transform the the Hamiltonian
+
+        Parameters
+        ----------
+        H_bar : dict
+            _description_
+        T_dict : dict
+            _description_
+        opt_flag : bool, optional
+            _description_, by default False
+
+        Returns
+        -------
+        dict
+            _description_
+        """        
+        # the function name to key is oppisite to similarity transform
+        
+        # TODO Get functions for qaudratic  
+        # TODO Get functions for linear
+        # TODO Get functions for cubic   
+        # TODO Get functions for qaurtic 
+        # TODO debug functions for linear
+        # TODO debug function for quadratic
+        # TODO Get functions for cubic   
+        # TODO Get functions for qaurtic  
+        
+        # H with a single acreation operator is represented by
+        #     - self.h[(1, 0)]
+        # H with a single anhilation operator is represented by
+        #     - self.h[(0, 1)]
+        A, N = self.A, self.N
+
+        T_conj ={1: None}
+        T_conj[1] = T_dict[1].copy()
+        
+        def f_s_0(O_mat):
+            """return constant residue"""
+
+            R = np.zeros([A, A], dtype=complex)
+            
+            # constant
+            R += O_mat[(0, 0)]
+
+            if self.T_truncation_order >= 1:
+                R += np.einsum('i,abi->ab',T_conj[1],O_mat[(1, 0)])
+
+                # not used debugging               
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('i,j,abij->ab', T_conj[1], T_conj[1],O_mat[(2, 0)])
+                if self.trunc.at_least_cubic:
+                    R += (1/6) * np.einsum('i,j,k,abijk-> ab',T_conj[1], T_conj[1],T_conj[1],O_mat[(3, 0)]) 
+                if self.trunc.at_least_quartic:
+                    R += (1/24) * np.einsum('i,j,k,l,abijkl-> ab', T_conj[1], T_conj[1],T_conj[1], T_conj[1],O_mat[(4, 0)])
+
+            return R
+
+        def f_s_i(O_mat):
+            """return residue R_i"""
+
+            R = np.zeros([A, A, N], dtype=complex)
+            
+            # constant
+            R += O_mat[(0, 1)]
+            # NOT USED debugging purposes 
+            if self.T_truncation_order >= 1:
+                R += np.einsum('i,abij->abj',T_conj[1],O_mat[(1, 1)])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('i,j,abijk->abk', T_conj[1], T_conj[1],O_mat[(2, 1)])
+                if self.trunc.at_least_cubic:
+                    R += (1/6) * np.einsum('i,j,k,abijkl-> abl',T_conj[1], T_conj[1],T_conj[1],O_mat[(3, 1)]) 
+
+            return R
+
+        def f_s_I(O_mat):
+            """return residue R^I"""
+
+            R = np.zeros([A, A, N], dtype=complex)
+            
+            # constant
+            R += O_mat[(1, 0)]
+            
+            # NOT USED debugging purposes
+            if self.T_truncation_order >= 1:
+            
+                R += np.einsum('j,abij->abi',T_conj[1],O_mat[(2,0)])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('i,j,abijk->abk', T_conj[1], T_conj[1],O_mat[(3, 0)])
+                if self.trunc.at_least_cubic:
+                    R += (1/6) * np.einsum('i,j,k,abijkl-> abl',T_conj[1], T_conj[1],T_conj[1],O_mat[(4, 0)]) 
+            
+            return R
+
+        def f_s_Ij(O_mat):
+            """return residue R^I_j"""
+            
+            R = np.zeros([A, A, N, N], dtype=complex)
+            
+            # constant
+            R += O_mat[(1,1)]
+            
+            if self.T_truncation_order >= 1:
+                R += np.einsum('i,abijk->abjk',T_conj[1],O_mat[(2, 1)])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('i,j,abijkl->abkl', T_conj[1], T_conj[1],O_mat[(3, 1)])
+                
+            return R
+        
+        def f_s_IJ(O_mat):
+            """return residue R_IJ"""
+            
+            R = np.zeros([A, A, N, N], dtype=complex)
+            
+            # constant
+            R += O_mat[(0,2)]
+            
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('i,abijk->abjk',T_conj[1],O_mat[(1, 2)])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.25 * np.einsum('i,j,abijkl->abkl', T_conj[1], T_conj[1],O_mat[(2, 2)])
+                
+            return R
+        
+        
+        def f_s_ij(O_mat):
+            """return residue R^ij"""
+            R = np.zeros([A, A, N, N], dtype=complex)
+            
+            # constant
+            R += O_mat[(2,0)]
+            
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('i,abijk->abjk',T_conj[1],O_mat[(3, 0)])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.25 * np.einsum('i,j,abijkl->abkl', T_conj[1], T_conj[1],O_mat[(4, 0)])
+
+            return R
+
+        output_tensor = {
+                (0, 0): f_s_0(H_bar),
+                (1, 0): f_s_I(H_bar), # contributes matrix h^i element for debug 
+                (0, 1): f_s_i(H_bar), # contributes matrix h_i element for debug 
+                
+                (1, 1): f_s_Ij(H_bar),
+                (0, 2): f_s_IJ(H_bar),
+                (2, 0): f_s_ij(H_bar),
+        }
+
+        return output_tensor
+
+    def _similarity_trans_Oz(self, H_args, t_args):
+        """ Apply a similarity transformation to the Hamiltonian.
+        This is applied for each electronic surface.
+        
+        updated
+        TODO- Test Linear function with corresponding system  
+        TODO-  Test quadratic function with corresponding system
+        TODO Write cubic functions 
+        TODO Write quartic functions  
+        """
+
+        A, N = self.A, self.N   # for readability
+
+        # rewrite residue for T to avoid permutations of electronic labels
+        def f_t_0(H, T):
+            """return residue R_0"""
+
+            # initialize as zero
+            R = np.zeros([A, A], dtype=complex)
+
+            # constant
+            R += H[(0, 0)]
+            # upper 
+            # lower 
+            
+            # linear
+            if self.T_truncation_order >= 1:
+                R += np.einsum('abk,k->ab', H[(0, 1)], T[1])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('abkl,k,l->ab', H[(0, 2)], T[1], T[1])
+                if self.trunc.at_least_cubic:
+                    R += (1/6) * np.einsum('abijk,i,j,k-> ab', H[(0, 3)], T[1], T[1], T[1]) 
+                if self.trunc.at_least_quartic:
+                    R += (1/24) * np.einsum('abijkl,i,j,k,l-> ab', H[(0, 4)], T[1], T[1], T[1], T[1])
+          
+
+            return R
+
+        def f_t_I(H, T):
+            """return residue R_I"""
+
+            # initialize as zero
+            R = np.zeros([A, A, N], dtype=complex)
+
+            # constant
+            # (upper,lower)
+            #capital:lower index
+            #lower case: upper index
+            R += H[(0, 1)]
+            
+            
+            if self.T_truncation_order >= 1:
+                R += np.einsum('abij,j->abi', H[(0, 2)], T[1])
+
+                if self.trunc.at_least_quadratic:
+                    R += np.einsum('abijk,j,k->abi', H[(0, 3)], T[1],T[1])                
+                if self.trunc.at_least_cubic:
+                    R += np.einsum('abijkl,j,k,l->abi', H[(0, 4)], T[1],T[1],T[1])
+
+            return R
+
+        def f_t_i(H, T):
+            """return residue R^i"""
+
+            # initialize
+            R = np.zeros([A, A, N], dtype=complex)
+
+            # non zero initial value of R
+            R += H[(1, 0)]
+
+            # linear
+            if self.T_truncation_order >= 1:
+                R += np.einsum('abij,j->abi', H[(1, 1)], T[1])
+                
+                if self.trunc.at_least_quadratic:
+                    R += 0.5 * np.einsum('abijk,j,k->abi', H[(1, 2)], T[1], T[1])
+                if self.trunc.at_least_cubic:
+                    R += (1/6) * np.einsum('abijkl,j,k,l -> abi', H[(1, 3)], T[1], T[1], T[1])
+        
+            return R
+
+        def f_t_Ij(H, T):
+            """return residue R^I_j"""
+
+            # initialize
+            R = np.zeros([A, A, N, N], dtype=complex)
+
+            # constant
+            R += H[(1, 1)]
+            
+            if self.T_truncation_order >= 1:
+                R += np.einsum('abijk,k->abij', H[(1, 2)], T[1])
+
+                if self.trunc.at_least_quadratic:
+                    R += 0.5*np.einsum('abijkl,k,l->abij', H[(1, 3)], T[1],T[1])                
+
+
+            return R
+
+        def f_t_IJ(H, T):
+            """return residue R_IJ"""
+
+            # initialize as zero
+            R = np.zeros([A, A, N, N], dtype=complex)
+            
+            # constant 
+            R += H[(0,2)]
+
+            # linear            
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('abijk,k->abij', H[(0, 3)], T[1])
+
+                if self.trunc.at_least_quadratic:
+                    R += 0.25*np.einsum('abijkl,k,l->abij', H[(0, 4)], T[1],T[1])              
+
+            return R
+
+        def f_t_ij(H, T):
+            """return residue R^ij"""
+
+            # initialize as zero
+            R = np.zeros([A, A, N, N], dtype=complex)
+            
+            R += H[(2,0)]
+
+            if self.T_truncation_order >= 1:
+                R += 0.5*np.einsum('abijk,k->abij', H[(2, 1)], T[1])
+
+                if self.trunc.at_least_quadratic:
+                    R += 0.25*np.einsum('abijkl,k,l->abij', H[(2, 2)], T[1],T[1])
+            
+            return R
+        
+        def f_t_ijk():
+            return
+        def f_t_IJK():
+            return
+        def f_t_IJk():
+            return
+        def f_t_ijK():
+            return
+        def f_t_Ijkl():
+            return
+        def f_t_iJKl():
+            return
+        def f_t_IJKl():
+            return
+        def f_t_ijkl():
+            return
+        def f_t_IJkl():
+            return
+          
+        
+        # compute similarity transformed Hamiltonian over e^T
+        sim_h = {}
+        
+        
+        sim_h[(0, 0)] = f_t_0(H_args, t_args)
+        sim_h[(0, 1)] = f_t_I(H_args, t_args)
+        sim_h[(1, 0)] = f_t_i(H_args, t_args)
+         
+        # rank 2
+        sim_h[(1, 1)] = f_t_Ij(H_args, t_args)
+        sim_h[(0, 2)] = f_t_IJ(H_args, t_args)
+        sim_h[(2, 0)] = f_t_ij(H_args, t_args)
+        
+        # rank 3
+        sim_h[(3, 0)] = H_args[(3, 0)]
+        sim_h[(0, 3)] = H_args[(0, 3)]
+        sim_h[(1, 2)] = H_args[(1, 2)]
+        sim_h[(2, 1)] = H_args[(2, 1)]
+ 
+        # rank 4 
+        sim_h[(3, 1)] = H_args[(3, 1)]
+        sim_h[(1, 3)] = H_args[(1, 3)]
+        sim_h[(0, 4)] = H_args[(0, 4)]
+        sim_h[(4, 0)] = H_args[(4, 0)]
+        sim_h[(2, 2)] = H_args[(2, 2)]        
+        return sim_h
+
+    def _compute_Z_bar_matrix_Oz(self,Z:dict,T_dict:dict) -> dict:
+        """Returns Similairty transform of Z with e^{T_dict^dagger}
+
+        Parameters
+        ----------
+        Z : dict
+            _description_
+        T_dict : dict
+            _description_
+
+        Returns
+        -------
+        dict
+            _description_
+        """                
+        T_1_conj_dict = {
+                # 0: 0  # t_0 IS zero
+                1: np.conj(T_dict[1]),
+            }
+        
+        Z_bar_dict = {
+           0 : 1,
+           1 : 0,
+        }
+        
+        
+        if self.Z_truncation_order >= 2:
+            
+            Z_bar_dict[2] = np.zeros(Z[2].shape)
+             
+            if self.T_truncation_order >= 0:
+                
+                Z_bar_dict[2] += Z[2] 
+            
+            if self.T_truncation_order >= 1:
+                
+                Z_bar_dict[2] += 0.5*np.einsum('i,abijk -> abjk',T_1_conj_dict[1],Z[3])
+                
+            if self.T_truncation_order >= 2:
+                
+                Z_bar_dict[2] += 0.25*np.einsum('i,j,abijkl -> abkl',T_1_conj_dict[1],T_1_conj_dict[1],Z[4])
+                
+        
+        if self.Z_truncation_order >= 3:
+
+            Z_bar_dict[3] = np.zeros(Z[3].shape)
+                
+            if self.T_truncation_order >= 0:
+                
+                Z_bar_dict[3] +=  (1/6)*Z[3]
+            
+            if self.T_truncation_order >= 1:
+                
+                Z_bar_dict[3] += (1/6)*np.einsum('i,abijkl -> abjkl',T_1_conj_dict[1],Z[4])
+            
+        
+        if self.Z_truncation_order >= 4:
+
+                Z_bar_dict[4] = (1/24)*Z[4].copy()
+    
+        return Z_bar_dict
+    
+    def _compute_z_0(self,Z_bar:dict,T_dict:dict)-> complex:
+        """Z_0 fellas 
+
+        Parameters
+        ----------
+        Z_bar : dict
+            Current time step Z_bar 
+        T_dict : dict
+            Current time step T_dict
+
+        Returns
+        -------
+        complex
+            _description_
+        """        
+        
+        T_1_conj_dict = {
+                # 0: 0  # t_0 IS zero
+                1: np.conj(T_dict[1]),}
+        
+        z_0 = np.zeros(self.A,complex)
+        
+        if (0,0) in Z_bar.keys():
+            z_0 += 1 
+        
+        if (1,0) in Z_bar.keys():
+            z_0 += 0
+        
+        if (2,0) in Z_bar.keys():
+            z_0 += 0.5*np.einsum('aij,i,j -> a', Z_bar[2], T_1_conj_dict[1],T_1_conj_dict[1])
+        
+        if (3,0) in Z_bar.keys():
+            z_0 += (1/6)*np.einsum('aijk,i,j,k -> a', Z_bar[3], T_1_conj_dict[1],T_1_conj_dict[1],T_1_conj_dict[1])
+        
+        if (4,0) in Z_bar.keys():
+            z_0 += (1/24)*np.einsum('aijkl,i,j,k,l -> a', Z_bar[4], T_1_conj_dict[1],T_1_conj_dict[1],T_1_conj_dict[1],T_1_conj_dict[1])
+        
+        return z_0 
+    
+    def zeroth_dT(self,derivatives:dict,R:dict,T_dict:dict)-> dict:
+        """_Function solves for the derivative of T_0 amplitudes 
+
+        Parameters
+        ----------
+        derivatives : dict
+            dictionary of derivative values 
+        R : dict
+            dictionary of residuals (H^tilde Z_bar)_conn 
+        T_dict : dict
+            dictionary of current time step T operators 
+
+        Returns
+        -------
+        dict
+            derivative values 
+        """       
+        
+        T_1_conj_dict = { 1 : np.conj(T_dict[1])}
+        #dT_0 = -1j*R[0]-np.einsum('i,i -> ',T_1_conj_dict[1],derivatives['dT_1']) 
+        dT_0 = R[0]-np.einsum('i,i -> ',T_1_conj_dict[1],derivatives['dT_1'])
+        derivatives['dT_0'] = dT_0[0]
+        
+        return derivatives
+    
+    def linear_dT(self,Z_bar:dict,derivatives:dict,R:dict) -> dict:
+        """Function solves for the derivative of T_1 amplitudes in time dependent mixed CI/Coupled cluster theory, 
+        by solving a set of linear equations posed by equation number in notes. it updates the derivative dictionary for 
+        the dt_1 key
+
+        Parameters
+        ----------
+        Z_bar : dict
+            ditcionary of Similarity transformed Z matrix 
+        derivatives : dict
+            dictionary of the arrays for each derivative 
+        R : dict
+            Resdiual GW dictionary for for all projections
+
+        Returns
+        -------
+        dict
+            Updated derivative dictionary 
+        """     
+        if self.Z_truncation_order == 1:
+            # W is 0 its straightforward
+            derivatives['dT_1'] = R[1][0,:]
+            
+
+        if self.Z_truncation_order >=2:        
+            # TODO ensure block_T_1 is a proper 1d array with imag and real terms collated
+                
+            # real matrix   
+            real_W = Z_bar[(2,0)].real.copy()
+            # complex matrix 
+            imag_w = Z_bar[(2,0)].imag.copy()
+            
+            # build block matrix Z_bar
+            block_W = np.block(([[imag_w, -real_W+np.eye(real_W.shape[0])],
+                                [-1j*(real_W-np.eye(real_W.shape[0])), -1j*imag_w]])) 
+            
+            # build block matrix R 
+            real_R = np.copy(R[1].real)
+            imag_R = np.copy(R[1].imag)
+            block_R = np.block([real_R,imag_R])
+            
+            # Solve for T_1 amps
+            block_dT_1 = np.linalg.solve(block_W,block_R) 
+            real_block_dT_1 = block_dT_1[:len(real_R)]
+            imag_block_dT_1 = 1j*block_dT_1[len(real_R):]
+            
+            # Change block mat T_1 to regular 1d array 
+            dT_1 = real_block_dT_1+imag_block_dT_1 
+            
+            derivatives['dT_1'] = dT_1
+        
+        return derivatives
+    
+    def derivative_functions(self,H_tilde,Z_bar,T_dict):
+        A = self.A
+        N = self.N        
+        
+        # residual dictionary
+        residual = {0:np.zeros(shape=(A, ), dtype=complex),
+                    1:np.zeros(shape=(A, N,),dtype=complex), 
+                    2:np.zeros(shape=(A, N, N),dtype=complex), 
+                    3:np.zeros(shape=(A, N, N, N),dtype=complex), 
+                    4:np.zeros(shape=(A, N, N, N, N),dtype=complex),}
+        
+        derivatives = {}
+        
+        for i in range(self.T_truncation_order+1):
+            derivatives[f'dT_{i}'] = None
+            
+        for i in range(2, self.Z_truncation_order+1):
+            derivatives[f'dZ_{i}'] = None
+        
+        _special_T_conj = {
+                    (0, 1): np.conj(T_dict[1]),
+                }
+        
+        # update residual linear 
+        # the residual functions just updates the dictionary entries in place 
+        # define residual_function for P = 0 <GW>
+        # 
+        z_three_eqns.add_m0_n0_HZ_terms(
+                            residual[0], self.ansatz, self.gen_trunc,
+                            _special_T_conj, H_tilde, Z_bar
+                        )
+        # define residual_function for P = 1 <Omega_1GW>  
+        z_three_eqns.add_m0_n1_HZ_terms(
+                            residual[1], self.ansatz, self.gen_trunc,
+                            _special_T_conj, H_tilde, Z_bar
+                        )
+        
+        # update derivative dictionarys
+        # find dT_1
+        derivatives = self.linear_dT(Z_bar,derivatives,residual)
+        
+        # find dT_0
+        derivatives = self.zeroth_dT(derivatives,residual,T_dict)
+
+        # apply conjugation?
+        for key in derivatives.keys():
+            derivatives[key] *= -1j
+ 
+        return derivatives
+    
+    def rk45_solve_ivp_integration_function_Oz(self,time,y_tensor,t_final):
+        
+        # INITIALIZE ARRAYS 
+        A, N = self.A, self.N
+        
+        # unpack y tensor 
+        # T-tensor is what is passed 
+        # unravel y tensor is meant for z and t bound to each other 
+        # for the inital step  Z dict is passed in here, however its initalized for values of Z-bar
+        # all integration steps are with respect to updating Z bar
+        # we only ever need to z_0 for the ACF   
+        z_bar_unraveled, t_unraveled = self._unravel_y_tensor(y_tensor)
+        
+        # printing progression
+        self._print_integration_progress(time, t_final, z_bar_unraveled, t_unraveled)
+        
+        # initialize new arrays
+        self.norm = np.zeros(A, dtype=complex)
+        
+        # will hold the total of the C(t) over all surfaces
+        C_tau_ABS = 0.0
+        C_tau_ECD = 0.0
+
+        # fill these arrays with zeros
+        for key in self.dT.keys():
+            self.dT[key].fill(complex(0.0))
+
+        # for all intents and purposes we will think of this d_zbar in accordance to my formulae  
+        for key in self.dZ.keys():
+            self.dZ[key].fill(complex(0.0))
+        
+        
+        # this goes every surface I only ever have 1 surface 
+        for b in range(A):
+
+            # pack T amplitude in to their dictionary 
+            t_dict = {0: t_unraveled[0][b]}
+
+            if self.T_truncation_order >= 1:
+                t_dict[1] = t_unraveled[1][b, :]
+
+
+            # pack Z amplitude
+            z_bar_dict = {(0,0): z_bar_unraveled[0][b]}
+
+            if self.Z_truncation_order >= 1:
+                z_bar_dict[(1,0)] = z_bar_unraveled[1][b, :]
+
+            if self.Z_truncation_order >= 2:
+                z_bar_dict[(2,0)] = z_bar_unraveled[2][b, :]
+
+            if self.Z_truncation_order >= 3:
+                z_bar_dict[(3,0)] = z_bar_unraveled[3][b, :]
+                
+            if self.Z_truncation_order >= 4:
+                z_bar_dict[(4,0)] = z_bar_unraveled[4][b, :]
+
+
+            # update hamiltonian with current time step T_amps
+            H_bar =  self._similarity_trans(self.h, t_dict) # this is consistent with my Oz function
+            t_conj ={(0,1):np.conj(t_dict[1])} 
+            H_tilde = self._cal_H_bar_tilde(H_bar,t_conj)#_cal_H_bar_tilde_Oz(H_bar,t_dict) # this is not consistent with OZ function 
+
+            # update derivatives  
+            derivatives = self.derivative_functions(H_tilde,z_bar_dict,t_dict) 
+            
+            # update object derivatives
+            self.dT[0][b] += derivatives['dT_0']
+            self.dT[1][b,:] += derivatives['dT_1']
+
+            if self.Z_truncation_order >= 2:
+                self.dZ[2][b,:] += derivatives['dZ_2'][b,:]
+            if self.Z_truncation_order >= 3:           
+                self.dZ[3][b,:] += derivatives['dZ_3'][b,:]
+            if self.Z_truncation_order >= 4:
+                self.dZ[4][b,:] += derivatives['dZ_4'][b,:] 
+
+            # calculate z_0 for the given step
+            z_0 = self._compute_z_0(z_bar_dict,t_dict)
+            assert z_0[0] == 1.0, f'd{type(z_0[0]),z_0[0]}' 
+            
+            
+            # compute ACF for ABS and ECD
+            U = z_0 * np.exp(t_dict[0])
+            print(z_0,'\n',t_dict[0],'\n',np.exp(t_dict[0]))
+            
+            if np.abs(np.exp(t_dict[0])) > 10:
+                breakpoint()
+            
+            # compute ACF for ABS and ECD
+            ACF_ABS = self.calculate_ACF_ABS(self.E_tdm, U, b)
+            ACF_ECD = self.calculate_ACF_ECD(self.M_tdm, self.E_tdm, U, b)
+            
+            # accumulate the ACF's
+            C_tau_ABS += ACF_ABS
+            C_tau_ECD += ACF_ECD
+            
+
+            # this included because it existed in neils code 
+            ## norm 
+            ## update norm 
+            ## accumulate norm
+             
+            
+        # flatten the z, t tensors into a 1D array
+        delta_y_tensor = self._ravel_y_tensor(self.dZ, self.dT)
+        
+        # # store ACF data
+        self.C_tau_ABS.append((time, C_tau_ABS))
+        self.C_tau_ECD.append((time, C_tau_ECD))
+
+        # # store norm and state pops for plot
+        self.Norm.append((time, 0))
+        
+        return delta_y_tensor
+    
+    def rk45_integration_oz(self, t_init=0., t_final=10., density=1.0, nof_points=10000, debug_flag=False):
+        """ Runge-Kutta integration scheme
+        """
+
+        # ------------------------------------------------------------------------
+        # initialize integration parameters
+        # ------------------------------------------------------------------------
+        log.info(
+            "We are going to preform a RK4(5) integration with: "
+            f"({t_init=} {t_final=} {density=} {nof_points=} {debug_flag=})"
+        )
+
+        A, N = self.A, self.N  # to reduce line lengths, for conciseness
+
+        # used for debugging purposes to print out the integration steps every n% of integration
+        self.counter = 0
+        self.last_counter = 0
+        self.last_print = 0
+
+        # this 'raw' step size is not scaled properly
+        raw_step_size = (t_final - t_init) / nof_points
+
+        # we need to convert the `raw_step_size`
+        step_size = self.apply_time_step_conversion(raw_step_size)
+        log.info(
+            f"{'Raw step size (unitless):':<26} ({raw_step_size})\n"
+            f"{'Real step size (eV/fs):':<26} ({step_size})"
+        )
+
+        # initialize accumulation tensor
+        U_0 = np.eye(A, dtype=complex)
+
+        # initialize autocorrelation list
+        # We need to store the t values for each C(t) so that we can match them up at the end
+        self.C_tau_ABS = [(0.0, np.einsum('ac,cd,ad->', self.E_tdm, U_0, self.E_tdm, dtype=complex))]
+        self.C_tau_ECD = [(0.0, np.einsum('ac,cd,ad->', self.M_tdm, U_0, self.E_tdm, dtype=complex))]
+
+        # initialize z_bar amplitude we never expliclty need Z we only every use z_tilde
+        initial_Z_tilde = {
+            0: np.eye(A, dtype=complex),
+            1: np.zeros([A, A, N], dtype=complex),
+            2: np.zeros([A, A, N, N], dtype=complex),
+            3: np.zeros([A, A, N, N, N], dtype=complex),
+            4: np.zeros([A, A, N, N, N, N], dtype=complex),
+        }
+
+        # initialize t amplitude
+        initial_T = {
+            0: np.zeros(A, dtype=complex),
+            1: np.zeros([A, N], dtype=complex),
+        }
+
+        # prepare the initial y_tensor
+        initial_y_tensor = self._ravel_y_tensor(initial_Z_tilde, initial_T)
+
+        # ------------------------------------------------------------------------
+        # the integration function called by the `solve_ivp` integrator at each step of integration
+        # ------------------------------------------------------------------------
+
+        # specify the precision of the integrator so that the output for the test models is numerically identical
+        if self.comparing_to_test_models:
+            relative_tolerance = 1e-10
+            absolute_tolerance = 1e-12
+        else:
+            # So the new "fix" does work but we need to up the tolerance parameters of the RK integrator to get agreement with MCTDH.
+            # I would do at least 1e-9 and 1e-12, the issue is that the integrator simply takes too large steps based on the ode's represented by S_0
+            # relative_tolerance = 1e-10
+            # absolute_tolerance = 1e-12
+            relative_tolerance = 1e-07
+            absolute_tolerance = 1e-09
+        # ------------------------------------------------------------------------
+        # call the integrator
+        # ------------------------------------------------------------------------
+        
+        integration_function = self.rk45_solve_ivp_integration_function_Oz
+
+        sol = new_solve_ivp(
+            fun=integration_function,  # the function we are integrating
+            method="RK45",  # the integration method we are using
+            # method="RK23",  # the integration method we are using
+            first_step=step_size,  # fix the initial step size
+            t_span=(
+                t_init,  # initial time
+                self.apply_time_step_conversion(t_final),  # boundary time, integration end point
+            ),
+            y0=initial_y_tensor,  # initial state - shape (n, )
+            args=(t_final, ),  # extra args to pass to `rk45_solve_ivp_integration_function`
+            max_step= 0.1, #self.step_size,  # maximum allowed step size
+            rtol=relative_tolerance,  # relative tolerance
+            atol=absolute_tolerance,  # absolute tolerance
+            store_y_values=False,  # do not store the y values over the integration
+            t_eval=None,  # store all the time values that we integrated over
+            dense_output=False,  # extra debug information
+            # we do not need to vectorize
+            # this means to process multiple time steps inside the function `rk45_solve_ivp_integration_function`
+            # it would be useful for a method which does some kind of block stepping
+            vectorized=False,
+        )
+        # ------------------------------------------------------------------------
+        # now we extract the relevant information from the integrator object `sol`
+        # ------------------------------------------------------------------------
+        
+        self._postprocess_rk45_integration_results(sol, debug=debug_flag)
+
+        return
+#######################################################
     def rk45_solve_ivp_integration_function(self, time, y_tensor, t_final):
         """ Integration function used by `solve_ivp` integrator inside `rk45_integration` method.
 
@@ -2003,7 +2847,8 @@ class vibronic_hamiltonian(object):
         that we are attempting to solve and k can represent multiple time steps to block integrate over
         at the moment we do not do any block integration so k is 1
         """
-
+        # TODO Make own RK4 integration function  
+        # TODO Debug RK4 integrator function 
         def solve_z(H_bar, Z, T, b, selected_surface, opt_flag=self.op_einsum_flag):
             """ Solve equations for Z amplitude
             conduct similarity transformation for the Hamiltonian over e^z
@@ -2125,6 +2970,7 @@ class vibronic_hamiltonian(object):
                         residual[1] = np.zeros(shape=(A, N), dtype=complex)
 
                         if not opt_flag:
+
                             z_three_eqns.add_m0_n1_HZ_terms(
                                 residual[1], self.ansatz, self.gen_trunc,
                                 _special_T_conj, H_bar_tilde, C
@@ -2243,7 +3089,7 @@ class vibronic_hamiltonian(object):
 
         # restore the origin shape of t, z amplitudes from y_tensor
         Z_unraveled, T_unraveled = self._unravel_y_tensor(y_tensor)
-
+        
         if False:  # for debugging
             log.info(f"time = {self.remove_time_step_conversion(time)}")
 
@@ -2291,7 +3137,7 @@ class vibronic_hamiltonian(object):
             self.dZ[key].fill(complex(0.0))
 
         for b in range(A):
-
+            
             # pack T amplitude
             t_dict = {0: T_unraveled[0][b]}
 
@@ -2312,7 +3158,7 @@ class vibronic_hamiltonian(object):
 
             if self.Z_truncation_order >= 3:
                 z_dict[3] = Z_unraveled[3][b, :]
-
+            
             # ## TO DO:
             # ## similarity transform the Hamiltonian over e^t
             H_bar = self._similarity_trans(self.h, t_dict)
@@ -2320,9 +3166,9 @@ class vibronic_hamiltonian(object):
             # ## TO DO:
             # ## similarity transform the Hamiltonian over 1+Z and evaluate Z/T residue
             dT, dZ, C = solve_z(H_bar, z_dict, t_dict, b, self.selected_surface)
-
             # compute ACF for ABS and ECD
             U = z_dict[0] * np.exp(t_dict[0])
+            
             ACF_ABS = self.calculate_ACF_ABS(self.E_tdm, U, b)
             ACF_ECD = self.calculate_ACF_ECD(self.M_tdm, self.E_tdm, U, b)
 
@@ -2443,7 +3289,7 @@ class vibronic_hamiltonian(object):
             1: np.zeros([A, N], dtype=complex),
             2: np.zeros([A, N, N], dtype=complex),
         }
-
+        
         # prepare the initial y_tensor
         initial_y_tensor = self._ravel_y_tensor(initial_Z, initial_T)
 
